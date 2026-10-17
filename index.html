@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cellomon</title>
+<style>
+    body {
+        background: #1a1a1a;
+        color: white;
+        font-family: Arial;
+        margin: 0;
+    }
+
+    .screen { display: none; }
+    .active { display: block; }
+
+    /* Rarity Colors */
+    .card-gold { background: linear-gradient(#d4af37, #b8860b); }
+    .card-purple { background: linear-gradient(#6a0dad, #4b0082); }
+    .card-blue { background: linear-gradient(#1e90ff, #4169e1); }
+    .card-green { background: linear-gradient(#228b22, #006400); }
+
+    /* Layout: deck left, battle center, boosters right */
+    #gameLayout {
+        display: flex;
+        height: 100vh;
+        box-sizing: border-box;
+    }
+
+    #leftDeck {
+        width: 22%;
+        background: #111;
+        border-right: 2px solid #333;
+        padding: 10px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    }
+
+    #centerBattle {
+        width: 56%;
+        padding: 10px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+
+    #rightBoosters {
+        width: 22%;
+        background: #111;
+        border-left: 2px solid #333;
+        padding: 10px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    }
+
+    #leftDeck h2,
+    #rightBoosters h2 {
+        margin-top: 0;
+        font-size: 22px;
+    }
+
+    .deckCard {
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 10px;
+        width: 100%;
+        height: 140px;
+        display: inline-block;
+        cursor: pointer;
+        font-size: 16px;
+        color: white;
+        box-sizing: border-box;
+        transition: transform 0.2s;
+    }
+
+    .deckCard:hover {
+        transform: translateY(-5px) scale(1.05);
+    }
+
+    .battleRow {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 10px;
+        gap: 20px;
+    }
+
+    .battleCard {
+        padding: 15px;
+        border-radius: 12px;
+        width: 200px;
+        height: 230px;
+        font-size: 18px;
+        color: white;
+        box-sizing: border-box;
+        position: relative;
+    }
+
+    .boosterAttached {
+        position: absolute;
+        right: -70px;
+        top: 20px;
+        width: 60px;
+        height: 90px;
+        border-radius: 8px;
+        background: #444;
+        font-size: 12px;
+        padding: 5px;
+        box-sizing: border-box;
+    }
+
+    #vsSymbol {
+        font-size: 40px;
+    }
+
+    /* KO animation */
+    .ko-anim {
+        animation: koPop 0.5s forwards;
+    }
+    @keyframes koPop {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(0.7); opacity: 0.7; }
+        100% { transform: scale(0); opacity: 0; }
+    }
+
+    /* Battle Log – horizontal scroll */
+    #battleLog {
+        background: #000;
+        width: 90%;
+        height: 80px;
+        margin: 10px auto;
+        padding: 8px;
+        border-radius: 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        text-align: left;
+        font-size: 14px;
+        white-space: nowrap;
+        box-sizing: border-box;
+    }
+    #battleLog p {
+        display: inline-block;
+        margin-right: 20px;
+    }
+
+    /* Buttons row */
+    #buttonRow {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    button {
+        margin: 0;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: none;
+        background: #3a3a3a;
+        color: white;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    button:hover {
+        background: #505050;
+    }
+
+    #boostArea {
+        margin-top: 5px;
+        font-size: 16px;
+    }
+
+    /* Start screen */
+    #startScreen h1 {
+        margin-top: 40px;
+        font-size: 32px;
+    }
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="startScreen" class="screen active">
+    <h1>Cellomon</h1>
+    <p>Choose a mode to start a match.</p>
+    <button onclick="startGame(3)">3 vs 3</button>
+    <button onclick="startGame(5)">5 vs 5</button>
+    <button onclick="startGame(7)">7 vs 7</button>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game" class="screen">
+    <div id="gameLayout">
+        <!-- LEFT: DECK -->
+        <div id="leftDeck">
+            <h2>Deck</h2>
+            <div id="playerDeck"></div>
+        </div>
+
+        <!-- CENTER: BATTLE -->
+        <div id="centerBattle">
+            <div class="battleRow">
+                <div id="aiCard"></div>
+                <div id="vsSymbol">VS</div>
+                <div id="playerCard"></div>
+            </div>
+
+            <div id="boostArea">Boosts used: <span id="boostList"></span></div>
+
+            <div id="battleLog"></div>
+
+            <div id="buttonRow">
+                <button onclick="playerAttack()">Attack</button>
+                <button onclick="playerUseBooster()">Use Booster</button>
+            </div>
+        </div>
+
+        <!-- RIGHT: BOOSTERS -->
+        <div id="rightBoosters">
+            <h2>Boosters</h2>
+            <div id="boosterDeck"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* CARD DATABASE */
+const cards = [
+    {name:"Nucleus", stars:4, dmg:3, type:"Both"},
+    {name:"Mitochondria", stars:5, dmg:4, type:"Both"},
+    {name:"Golgi Body", stars:3, dmg:2, type:"Both"},
+    {name:"Cytoskeleton", stars:2, dmg:1, type:"Both"},
+    {name:"Lysosome", stars:3, dmg:2, type:"Both"},
+    {name:"Cytoplasm", stars:3, dmg:2, type:"Both"},
+    {name:"Nucleolus", stars:3, dmg:2, type:"Both"},
+
+    {name:"Rough ER", stars:3, dmg:2, type:"Animal"},
+    {name:"Cell Membrane", stars:2, dmg:1, type:"Animal"},
+    {name:"Centriole", stars:3, dmg:2, type:"Animal"},
+
+    {name:"Chloroplast", stars:4, dmg:3, type:"Plant"},
+    {name:"Cell Wall", stars:3, dmg:2, type:"Plant"},
+    {name:"Large Central Vacuole", stars:3, dmg:2, type:"Plant"},
+    {name:"Smooth ER", stars:3, dmg:2, type:"Plant"},
+
+    {name:"Influenza", stars:4, dmg:0, type:"Virus"}
+];
+
+/* RARITY SYSTEM – harder */
+function weightedRandomCard() {
+    const roll = Math.random();
+    if (roll < 0.70) return cards.filter(c => c.stars <= 2)[Math.floor(Math.random()*cards.filter(c => c.stars <= 2).length)];
+    if (roll < 0.90) return cards.filter(c => c.stars === 3)[Math.floor(Math.random()*cards.filter(c => c.stars === 3).length)];
+    if (roll < 0.98) return cards.filter(c => c.stars === 4)[Math.floor(Math.random()*cards.filter(c => c.stars === 4).length)];
+    return cards.filter(c => c.stars === 5)[Math.floor(Math.random()*cards.filter(c => c.stars === 5).length)];
+}
+
+/* CARD COLOR */
+function getCardColor(stars) {
+    if (stars >= 5) return "card-gold";
+    if (stars === 4) return "card-purple";
+    if (stars === 3) return "card-blue";
+    return "card-green";
+}
+
+/* GAME STATE */
+let playerDeck = [];
+let aiDeck = [];
+let boosterDeck = [];
+let deckSize = 3;
+let aiIndex = 0;
+let playerTurn = true;
+let activePlayerCard = null;
+let activeAICard = null;
+let attachedBooster = null;
+
+/* SCREEN FLOW */
+function startGame(size) {
+    deckSize =
