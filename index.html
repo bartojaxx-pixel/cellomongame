@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cellomon</title>
+<style>
+    body {
+        background: #1a1a1a;
+        color: white;
+        font-family: Arial;
+        margin: 0;
+        text-align: center;
+    }
+
+    .screen { display: none; }
+    .active { display: block; }
+
+    /* Loading Screen */
+    #loading h1 {
+        animation: pulse 1.5s infinite;
+        margin-top: 200px;
+        font-size: 50px;
+    }
+    @keyframes pulse {
+        0% { opacity: 0.3; }
+        50% { opacity: 1; }
+        100% { opacity: 0.3; }
+    }
+
+    /* Deck Bar */
+    #deckBar {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background: #111;
+        padding: 10px;
+        border-top: 3px solid #333;
+        height: 220px;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    #deckLabel {
+        font-size: 24px;
+        margin-bottom: 10px;
+    }
+
+    .deckCard {
+        background: #2e2e2e;
+        padding: 15px;
+        margin: 5px;
+        border-radius: 12px;
+        width: 160px;
+        height: 200px;
+        display: inline-block;
+        transition: transform 0.2s;
+        cursor: pointer;
+        font-size: 18px;
+    }
+
+    .deckCard:hover {
+        transform: translateY(-12px) scale(1.08);
+    }
+
+    /* Battle Zone */
+    #battleZone {
+        margin-top: 20px;
+        padding-bottom: 240px;
+    }
+
+    .battleCard {
+        background: #2e2e2e;
+        padding: 20px;
+        margin: 10px;
+        border-radius: 12px;
+        width: 220px;
+        height: 260px;
+        display: inline-block;
+        font-size: 22px;
+    }
+
+    #vsSymbol {
+        font-size: 50px;
+        margin: 20px;
+    }
+
+    /* Battle Log */
+    #battleLog {
+        background: #000;
+        width: 70%;
+        height: 150px;
+        margin: 20px auto;
+        padding: 10px;
+        border-radius: 10px;
+        overflow-y: auto;
+        text-align: left;
+        font-size: 18px;
+    }
+
+    /* Buttons */
+    button {
+        margin: 5px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        border: none;
+        background: #3a3a3a;
+        color: white;
+        cursor: pointer;
+        font-size: 18px;
+    }
+    button:hover {
+        background: #505050;
+    }
+
+    /* Boost Area */
+    #boostArea {
+        margin-top: 10px;
+        font-size: 20px;
+    }
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loading" class="screen active">
+    <h1>Loading...</h1>
+    <button onclick="goToModeSelect()">Start</button>
+</div>
+
+<!-- MODE SELECT -->
+<div id="modeSelect" class="screen">
+    <h1>Select Mode</h1>
+    <button onclick="startGame(3)">3 Cards</button>
+    <button onclick="startGame(4)">4 Cards</button>
+    <button onclick="startGame(5)">5 Cards</button>
+    <button onclick="startGame(6)">6 Cards</button>
+    <button onclick="startGame(7)">7 Cards</button>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game" class="screen">
+
+    <div id="battleZone">
+        <div id="aiCard"></div>
+        <div id="vsSymbol">VS</div>
+        <div id="playerCard"></div>
+
+        <div id="boostArea">Boosts: <span id="boostList"></span></div>
+
+        <div id="battleLog"></div>
+
+        <button onclick="playerAttack()">Attack</button>
+        <button onclick="playerBoost('Animal')">Animal Protein</button>
+        <button onclick="playerBoost('Plant')">Plant Protein</button>
+        <button onclick="playerBoost('DNA')">DNA</button>
+    </div>
+
+    <div id="deckBar">
+        <div id="deckLabel">DECK</div>
+        <div id="playerDeck"></div>
+    </div>
+
+</div>
+
+<script>
+/* -------------------------
+   CARD DATABASE
+--------------------------*/
+
+const cards = [
+    {name:"Nucleus", stars:4, dmg:3, type:"Both"},
+    {name:"Mitochondria", stars:5, dmg:4, type:"Both"},
+    {name:"Golgi Body", stars:3, dmg:2, type:"Both"},
+    {name:"Cytoskeleton", stars:2, dmg:1, type:"Both"},
+    {name:"Lysosome", stars:3, dmg:2, type:"Both"},
+    {name:"Cytoplasm", stars:3, dmg:2, type:"Both"},
+    {name:"Nucleolus", stars:3, dmg:2, type:"Both"},
+
+    {name:"Rough ER", stars:3, dmg:2, type:"Animal"},
+    {name:"Cell Membrane", stars:2, dmg:1, type:"Animal"},
+    {name:"Centriole", stars:3, dmg:2, type:"Animal"},
+
+    {name:"Chloroplast", stars:4, dmg:3, type:"Plant"},
+    {name:"Cell Wall", stars:3, dmg:2, type:"Plant"},
+    {name:"Large Central Vacuole", stars:3, dmg:2, type:"Plant"},
+    {name:"Smooth ER", stars:3, dmg:2, type:"Plant"},
+
+    {name:"Influenza", stars:4, dmg:0, type:"Virus"}
+];
+
+/* -------------------------
+   RARITY SYSTEM
+--------------------------*/
+
+function weightedRandomCard() {
+    const roll = Math.random();
+    if (roll < 0.60) return cards.filter(c => c.stars <= 3)[Math.floor(Math.random()*cards.filter(c => c.stars <= 3).length)];
+    if (roll < 0.90) return cards.filter(c => c.stars === 4)[Math.floor(Math.random()*cards.filter(c => c.stars === 4).length)];
+    return cards.filter(c => c.stars === 5)[Math.floor(Math.random()*cards.filter(c => c.stars === 5).length)];
+}
+
+/* -------------------------
+   GAME STATE
+--------------------------*/
+
+let playerDeck = [];
+let aiDeck = [];
+let deckSize = 3;
+let round = 0;
+let playerTurn = true;
+let activePlayerCard = null;
+let activeAICard = null;
+
+/* -------------------------
+   SCREEN FLOW
+--------------------------*/
+
+function goToModeSelect() {
+    document.getElementById("loading").classList.remove("active");
+    document.getElementById("modeSelect").classList.add("active");
+}
+
+function startGame(size) {
+    deckSize = size;
+    playerDeck = [];
+    aiDeck = [];
+    round = 0;
+
+    for (let i = 0; i < deckSize; i++) {
+        playerDeck.push(JSON.parse(JSON.stringify(weightedRandomCard())));
+        aiDeck.push(JSON.parse(JSON.stringify(weightedRandomCard())));
+    }
+
+    document.getElementById("modeSelect").classList.remove("active");
+    document.getElementById("game").classList.add("active");
+
+    renderPlayerDeck();
+    decideFirstTurn();
+}
+
+/* -------------------------
+   RENDER PLAYER DECK
+--------------------------*/
+
+function renderPlayerDeck() {
+    let html = "";
+    playerDeck.forEach((c, i) => {
+        html += `<div class='deckCard' onclick='placeCard(${i})'>
+                    ${c.name}<br>${c.stars}★<br>${c.dmg} DMG
+                 </div>`;
+    });
+    document.getElementById("playerDeck").innerHTML = html;
+}
+
+/* -------------------------
+   PLACE CARD INTO BATTLE
+--------------------------*/
+
+function placeCard(index) {
+    if (activePlayerCard) return;
+
+    activePlayerCard = playerDeck[index];
+    playerDeck.splice(index, 1);
+    renderPlayerDeck();
+
+    document.getElementById("playerCard").innerHTML =
+        `<div class='battleCard'>${activePlayerCard.name}<br>${activePlayerCard.stars}★<br>${activePlayerCard.dmg} DMG</div>`;
+
+    activeAICard = aiDeck[round];
+    document.getElementById("aiCard").innerHTML =
+        `<div class='battleCard'>${activeAICard.name}<br>${activeAICard.stars}★<br>${activeAICard.dmg} DMG</div>`;
+
+    if (!playerTurn) aiTurn();
+}
+
+/* -------------------------
+   FIRST TURN PICK
+--------------------------*/
+
+function decideFirstTurn() {
+    playerTurn = Math.random() < 0.5;
+    log(playerTurn ? "You go first!" : "AI goes first!");
+}
+
+/* -------------------------
+   LOG
+--------------------------*/
+
+function log(text) {
+    document.getElementById("battleLog").innerHTML += `<p>${text}</p>`;
+}
+
+/* -------------------------
+   BOOST SYSTEM
+--------------------------*/
+
+function playerBoost(type) {
+    if (!playerTurn || !activePlayerCard) return log("Not your turn.");
+
+    placeBoost(activePlayerCard, type, true);
+    playerTurn = false;
+    aiTurn();
+}
+
+function placeBoost(card, type, isPlayer) {
+    if (type === "Animal" && card.type === "Animal") {
+        card.dmg += 1;
+        log(`${isPlayer ? "You" : "AI"} used Animal Protein on ${card.name}.`);
+    } else if (type === "Plant" && card.type === "Plant") {
+        card.stars += 1;
+        card.dmg = card.stars - 1;
+        log(`${isPlayer ? "You" : "AI"} used Plant Protein on ${card.name}.`);
+    } else if (type === "DNA" && card.type === "Both") {
+        card.stars += 1;
+        card.dmg = card.stars - 1;
+        log(`${isPlayer ? "You" : "AI"} used DNA on ${card.name}.`);
+    } else {
+        log(`${isPlayer ? "You" : "AI"} tried to boost but it failed.`);
+    }
+
+    document.getElementById("boostList").innerHTML += `${type} `;
+}
+
+/* -------------------------
+   PLAYER ATTACK
+--------------------------*/
+
+function playerAttack() {
+    if (!playerTurn || !activePlayerCard) return log("Not your turn.");
+
+    log(`You attack with ${activePlayerCard.name}!`);
+    resolveCombat(true);
+    playerTurn = false;
+    aiTurn();
+}
+
+/* -------------------------
+   AI TURN
+--------------------------*/
+
+function aiTurn() {
+    if (!activeAICard) return;
+
+    const roll = Math.random();
+    if (roll < 0.3) {
+        if (activeAICard.type === "Animal") placeBoost(activeAICard, "Animal", false);
+        else if (activeAICard.type === "Plant") placeBoost(activeAICard, "Plant", false);
+        else if (activeAICard.type === "Both") placeBoost(activeAICard, "DNA", false);
+        else log("AI tried to boost but failed.");
+
+        playerTurn = true;
+        return;
+    }
+
+    log(`AI attacks with ${activeAICard.name}!`);
+    resolveCombat(false);
+    playerTurn = true;
+}
+
+/* -------------------------
+   COMBAT
+--------------------------*/
+
+function resolveCombat(playerInitiated) {
+    if (activeAICard.name === "Influenza") {
+        log("Influenza triggers Infection Swap!");
+        let hp = activeAICard.stars;
+        for (let i = 0; i < 3; i++) hp -= activePlayerCard.dmg;
+
+        if (hp <= 0) log("You killed Influenza!");
+        else log("Influenza survives. Both cards die.");
+    } else {
+        const p = activePlayerCard.dmg;
+        const a = activeAICard.dmg;
+
+        if (p > a) log("You win the round!");
+        else if (a > p) log("AI wins the round!");
+        else log("Round is a draw.");
+    }
+
+    round++;
+    activePlayerCard = null;
+    activeAICard = null;
+
+    document.getElementById("playerCard").innerHTML = "";
+    document.getElementById("aiCard").innerHTML = "";
+    document.getElementById("boostList").innerHTML = "";
+}
+
+</script>
+
+</body>
+</html>
