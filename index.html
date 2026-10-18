@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cell Battle</title>
+<style>
+  :root {
+    --bg: #0f1a2e;
+    --panel: #1a2a45;
+    --accent: #4ecdc4;
+    --gold: #ffd700;
+    --purple: #c084fc;
+    --blue: #60a5fa;
+    --green: #4ade80;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: #e2e8f0; }
+  .screen { display: none; min-height: 100vh; width: 100%; padding: 16px; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  #startScreen { justify-content: center; align-items: center; text-align: center; }
+  #startScreen h1 { font-size: 2.4rem; margin-bottom: 8px; }
+  .stats { display: flex; justify-content: center; gap: 28px; font-size: 1.2rem; margin: 16px 0 24px; flex-wrap: wrap; }
+  .menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; max-width: 720px; width: 100%; }
+  .menu button { padding: 15px; font-size: 1.05rem; }
+
+  button {
+    background: var(--accent); color: #0f1a2e; border: none; padding: 10px 16px;
+    border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.15s;
+  }
+  button:hover { transform: scale(1.05); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-gold { background: var(--gold); color: #111; }
+  .btn-google { background: #fff; color: #333; border: 1px solid #ccc; }
+
+  .card, .deckCard, .battleCard {
+    width: 118px; height: 168px; border-radius: 10px; padding: 6px;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    text-align: center; font-size: 0.78rem; line-height: 1.2;
+    border: 3px solid #4a5a7a; background: linear-gradient(145deg, #2a3a55, #1e2d44);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4); user-select: none;
+  }
+  .card-gold, .deckCard.card-gold, .battleCard.card-gold { border-color: var(--gold); background: linear-gradient(145deg,#3d2e00,#2a2000); }
+  .card-purple, .deckCard.card-purple, .battleCard.card-purple { border-color: var(--purple); background: linear-gradient(145deg,#2e1a3d,#1f1230); }
+  .card-blue, .deckCard.card-blue, .battleCard.card-blue { border-color: var(--blue); background: linear-gradient(145deg,#0f2a4a,#0a1f38); }
+  .card-green, .deckCard.card-green, .battleCard.card-green { border-color: var(--green); }
+  .card-back {
+    width: 118px; height: 168px; border-radius: 10px;
+    background: linear-gradient(145deg,#1e3a5f,#0f2744); border: 3px solid #3b82f6;
+    display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
+  }
+  .hand-card { cursor: pointer; transition: transform 0.18s, box-shadow 0.18s; }
+  .hand-card:hover { transform: translateY(-12px) scale(1.05); box-shadow: 0 10px 20px rgba(0,0,0,0.5); z-index: 5; }
+  .hand-card.selected { transform: translateY(-16px) scale(1.07); box-shadow: 0 0 0 3px var(--accent); z-index: 8; }
+
+  #game { padding: 8px 12px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.95rem; flex-wrap: wrap; gap: 6px; }
+  .ai-zone { text-align: center; margin-bottom: 4px; }
+  .ai-hand { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; opacity: 0.75; margin-top: 4px; }
+  .battlefield { flex: 1; display: flex; align-items: center; justify-content: center; gap: 40px; min-height: 180px; }
+  .field-label { font-size: 0.85rem; opacity: 0.8; margin-bottom: 4px; text-align: center; }
+  #battleLog {
+    height: 40px; overflow-x: auto; white-space: nowrap; background: #0a1220;
+    border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; margin: 6px 0;
+    display: flex; align-items: center; gap: 14px;
+  }
+  #battleLog p { display: inline; margin-right: 14px; }
+  .boosters { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 4px 0; }
+  .booster {
+    width: 68px; height: 78px; border-radius: 8px; background: #1e293b; border: 2px solid #475569;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.72rem; cursor: pointer;
+  }
+  .booster.selected { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 6px 0; }
+  .player-zone { text-align: center; }
+  .player-hand { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; min-height: 170px; padding: 6px 0; }
+
+  .flash-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .flash-overlay.show { opacity: 1; }
+  .flash-first { background: rgba(0,0,0,0.7); color: var(--accent); }
+  .flash-damage { background: rgba(248, 113, 113, 0.35); }
+  .flash-ko { background: rgba(220, 38, 38, 0.75); }
+
+  .panel { max-width: 720px; margin: 0 auto; background: var(--panel); border-radius: 14px; padding: 20px; width: 100%; }
+  .back { margin-bottom: 12px; }
+  .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+  .shop-item { background: #1e293b; padding: 14px; border-radius: 10px; text-align: center; border: 2px solid #334155; }
+  .shop-item.uncommon { border-color: #4ade80; }
+  .shop-item.rare { border-color: #60a5fa; }
+  .shop-item.epic { border-color: #c084fc; }
+  .shop-item.legendary { border-color: #ffd700; }
+  .trophy { font-size: 2rem; margin-bottom: 4px; }
+  .ruleCard { display: flex; gap: 10px; align-items: center; background: #1e293b; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+  .shiny-banner {
+    position: fixed; top: 18%; left: 50%; transform: translateX(-50%);
+    background: linear-gradient(90deg, gold, #ffec8b); color: #000;
+    padding: 12px 24px; border-radius: 10px; font-size: 1.25rem; font-weight: 800;
+    z-index: 100; animation: banner 2.3s forwards; pointer-events: none;
+  }
+  @keyframes banner {
+    0% { transform: translateX(-50%) scale(0.3); opacity: 0; }
+    15% { transform: translateX(-50%) scale(1.1); opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .ko { animation: ko 0.5s forwards; }
+  @keyframes ko {
+    0% { transform: scale(1); opacity: 1; }
+    40% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  .hidden { display: none !important; }
+  .select-box { background: var(--panel); padding: 18px; border-radius: 12px; max-width: 420px; margin: 16px auto; text-align: center; }
+  .diff-btn { margin: 4px; min-width: 90px; }
+  .diff-btn.active { outline: 3px solid var(--accent); }
+</style>
+</head>
+<body>
+
+<div id="flashFirst" class="flash-overlay flash-first"></div>
+<div id="flashDamage" class="flash-overlay flash-damage"></div>
+<div id="flashKO" class="flash-overlay flash-ko"></div>
+
+<!-- START -->
+<div id="startScreen" class="screen active">
+  <h1>🧬 Cell Battle</h1>
+  <div class="stats">
+    <span>💰 <strong id="coinCount">0</strong></span>
+    <span>🧪 <strong id="potionCount">0</strong></span>
+  </div>
+  <div id="userInfo" style="margin-bottom:10px;font-size:0.95rem;"></div>
+  <div class="menu">
+    <button onclick="openPlayMenu()">Play vs AI</button>
+    <button onclick="startHotseat()">Multiplayer (Hotseat)</button>
+    <button onclick="showPanel('storagePanel')">Storage</button>
+    <button onclick="showPanel('shopPanel')">Shop</button>
+    <button onclick="showPanel('quizPanel')">Quiz</button>
+    <button onclick="showPanel('rulesPanel')">Rules</button>
+    <button onclick="showPanel('settingsPanel')">Settings</button>
+    <button class="btn-google" id="googleBtn" onclick="toggleGoogle()">Sign in with Google</button>
+  </div>
+
+  <!-- Size + Difficulty -->
+  <div id="playMenu" class="select-box hidden">
+    <h3>Match Setup</h3>
+    <p style="margin:10px 0 6px;">Size</p>
+    <div>
+      <button onclick="setSize(3)" id="size3">3 vs 3</button>
+      <button onclick="setSize(5)" id="size5">5 vs 5</button>
+      <button onclick="setSize(7)" id="size7">7 vs 7</button>
+    </div>
+    <p style="margin:14px 0 6px;">Difficulty (affects AI cards only)</p>
+    <div>
+      <button class="diff-btn" onclick="setDiff('easy')" id="diffEasy">Easy</button>
+      <button class="diff-btn" onclick="setDiff('normal')" id="diffNormal">Normal</button>
+      <button class="diff-btn" onclick="setDiff('hard')" id="diffHard">Hard</button>
+      <button class="diff-btn" onclick="setDiff('insane')" id="diffInsane">Insane</button>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn-gold" onclick="goToPotions()">Next: Potions</button>
+      <button class="btn-danger" onclick="hidePlayMenu()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="potionSelect" class="select-box hidden">
+    <h3>Use Potions for Luck?</h3>
+    <p>You have <strong id="potionAvail">0</strong> potions</p>
+    <div id="potionButtons" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0;"></div>
+    <p>Selected: <strong id="potionChosen">0</strong> → Luck ×<span id="luckPreview">1.0</span></p>
+    <div style="margin-top:12px;">
+      <button class="btn-gold" onclick="confirmStart()">Start Match</button>
+      <button class="btn-danger" onclick="cancelPotion()">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game" class="screen">
+  <div class="topbar">
+    <div><span id="modeLabel">3v3</span> · <span id="diffLabel">Normal</span> <span id="modeType"></span></div>
+    <div>Luck ×<span id="luckLabel">1.0</span></div>
+    <button class="btn-danger" onclick="endMatch()">End Match</button>
+  </div>
+
+  <div class="ai-zone">
+    <div id="opponentLabel" style="font-size:0.9rem;margin-bottom:4px;">AI</div>
+    <div id="aiCard"></div>
+    <div class="ai-hand" id="aiHand"></div>
+  </div>
+
+  <div class="battlefield">
+    <div>
+      <div class="field-label">Your Active</div>
+      <div id="playerCard"></div>
+    </div>
+    <div>
+      <div class="field-label" id="oppFieldLabel">AI Active</div>
+      <div id="aiBattleDisplay"></div>
+    </div>
+  </div>
+
+  <div id="battleLog"></div>
+  <div style="text-align:center;font-size:0.85rem;opacity:0.85;">Boosters</div>
+  <div class="boosters" id="boosterDeck"></div>
+  <div class="controls">
+    <button id="btnPlay" onclick="playSelected()">Play Selected Card</button>
+    <button id="btnAttack" onclick="playerAttack()">Attack</button>
+    <button id="btnBoost" onclick="playerUseBooster()">Use Booster</button>
+  </div>
+  <div class="player-zone">
+    <div style="font-size:0.9rem;margin-bottom:4px;">Your Cards (hover · click to select)</div>
+    <div class="player-hand" id="playerDeck"></div>
+  </div>
+</div>
+
+<!-- STORAGE -->
+<div id="storagePanel" class="screen">
+  <div class="panel">
+    <button class="back" onclick="backToStart()">← Back</button>
+    <h2>Storage (Shinies)</h2>
+    <div id="storageList" style="margin:12px 0;"></div>
+    <button onclick="sellExtras()">Sell Duplicates</button>
+  </div>
+</div>
+
+<!-- SHOP -->
+<div id="shopPanel" class="screen">
+  <div class="panel">
+    <button class="back" onclick="backToStart()">← Back</button>
+    <h2>Potion Shop</h2>
+    <div class="stats" style="margin:12px 0;">
+      <span>💰 <strong id="shopCoins">0</strong></span>
+      <span>🧪 <strong id="shopPotions">0</strong></span>
+    </div>
+    <div class="shop-grid">
+      <div class="shop-item uncommon"><div class="trophy">🥉</div><strong>Uncommon</strong><br><small>+1 luck</small><br>12 coins<br><button onclick="buyPotion('uncommon')" style="margin-top:8px;">Buy</button></div>
+      <div class="shop-item rare"><div class="trophy">🥈</div><strong>Rare</strong><br><small>+2 luck</small><br>25 coins<br><button onclick="buyPotion('rare')" style="margin-top:8px;">Buy</button></div>
+      <div class="shop-item epic"><div class="trophy">🥇</div><strong>Epic</strong><br><small>+3 luck</small><br>50 coins<br><button onclick="buyPotion('epic')" style="margin-top:8px;">Buy</button></div>
+      <div class="shop-item legendary"><div class="trophy">🏆</div><strong>Legendary</strong><br><small>+5 luck</small><br>100 coins<br><button class="btn-gold" onclick="buyPotion('legendary')" style="margin-top:8px;">Buy</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- QUIZ -->
+<div id="quizPanel" class="screen">
+  <div class="panel">
+    <button class="back" onclick="backToStart()">← Back</button>
+    <h2>Cell Quiz</h2>
+    <div style="background:#1e293b;padding:16px;border-radius:10px;text-align:center;">
+      <p id="quizQ">Loading…</p>
+      <div id="quizOpts" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;"></div>
+      <p id="quizFb" style="margin-top:10px;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- RULES -->
+<div id="rulesPanel" class="screen">
+  <div class="panel">
+    <button class="back" onclick="backToStart()">← Back</button>
+    <h2>Rules</h2>
+    <div id="rulesList"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settingsPanel" class="screen">
+  <div class="panel">
+    <button class="back" onclick="backToStart()">← Back</button>
+    <h2>Settings & Info</h2>
+    <p style="opacity:0.85;line-height:1.5;">
+      • Google Sign-in saves progress (coins, potions, shinies) on this device.<br>
+      • Real online multiplayer against random people needs a server (not possible in a pure single-file game).<br>
+      • Hotseat = two players on the same device taking turns.
+    </p>
+  </div>
+</div>
+
+<script>
+/* ===================== DATA ===================== */
+const cards = [
+  {name:"Nucleus", stars:4, dmg:3, type:"Both"},
+  {name:"Mitochondria", stars:5, dmg:4, type:"Both"},
+  {name:"Golgi Body", stars:3, dmg:2, type:"Both"},
+  {name:"Cytoskeleton", stars:2, dmg:1, type:"Both"},
+  {name:"Lysosome", stars:3, dmg:2, type:"Both"},
+  {name:"Cytoplasm", stars:3, dmg:2, type:"Both"},
+  {name:"Nucleolus", stars:3, dmg:2, type:"Both"},
+  {name:"Rough ER", stars:3, dmg:2, type:"Animal"},
+  {name:"Cell Membrane", stars:2, dmg:1, type:"Animal"},
+  {name:"Centriole", stars:3, dmg:2, type:"Animal"},
+  {name:"Chloroplast", stars:4, dmg:3, type:"Plant"},
+  {name:"Cell Wall", stars:3, dmg:2, type:"Plant"},
+  {name:"Large Central Vacuole", stars:3, dmg:2, type:"Plant"},
+  {name:"Smooth ER", stars:3, dmg:2, type:"Plant"},
+  {name:"Influenza", stars:4, dmg:0, type:"Virus", special:"infect"}
+];
+
+function getCardColor(s) {
+  if (s >= 5) return "card-gold";
+  if (s === 4) return "card-purple";
+  if (s === 3) return "card-blue";
+  return "card-green";
+}
+
+/* Difficulty weights for AI cards */
+const DIFF_WEIGHTS = {
+  easy:   [0.55, 0.30, 0.12, 0.03], // 2★, 3★, 4★, 5★
+  normal: [0.40, 0.35, 0.18, 0.07],
+  hard:   [0.20, 0.30, 0.30, 0.20],
+  insane: [0.05, 0.15, 0.35, 0.45]
+};
+
+function weightedCardForAI(diff) {
+  const w = DIFF_WEIGHTS[diff] || DIFF_WEIGHTS.normal;
+  const r = Math.random();
+  let stars;
+  if (r < w[0]) stars = 2;
+  else if (r < w[0]+w[1]) stars = 3;
+  else if (r < w[0]+w[1]+w[2]) stars = 4;
+  else stars = 5;
+  let pool = cards.filter(c => c.stars === stars);
+  if (!pool.length) pool = cards;
+  return JSON.parse(JSON.stringify(pool[Math.floor(Math.random()*pool.length)]));
+}
+function weightedCardForPlayer() {
+  const roll = Math.random();
+  let stars;
+  if (roll < 0.70) stars = 2;
+  else if (roll < 0.90) stars = 3;
+  else if (roll < 0.98) stars = 4;
+  else stars = 5;
+  let pool = cards.filter(c => c.stars === stars);
+  if (!pool.length) pool = cards;
+  return JSON.parse(JSON.stringify(pool[Math.floor(Math.random()*pool.length)]));
+}
+
+/* ===================== STATE ===================== */
+let coins = 60, potions = 2, shinyStorage = [];
+let matchLuck = 1, potionsToUse = 0;
+let pendingSize = 3, difficulty = "normal";
+let isHotseat = false;
+let playerDeck = [], aiDeck = [], boosterDeck = [];
+let activePlayerCard = null, activeAICard = null;
+let selectedHandIndex = null, selectedBoosterIndex = null;
+let playerTurn = true, matchOver = false, waitingForPlayerCard = false;
+let actionsThisTurn = 0;          // prevents multiple attacks/boosts
+let googleUser = null;
+
+/* ===================== GOOGLE (local save) ===================== */
+function toggleGoogle() {
+  if (googleUser) {
+    googleUser = null;
+    localStorage.removeItem("cellbattle_user");
+    document.getElementById("googleBtn").textContent = "Sign in with Google";
+    document.getElementById("userInfo").textContent = "";
+    loadProgress();
+    return;
+  }
+  // Demo sign-in (real Google needs a Client ID)
+  googleUser = { id: "user_" + Date.now(), name: "Player" };
+  localStorage.setItem("cellbattle_user", JSON.stringify(googleUser));
+  document.getElementById("googleBtn").textContent = "Sign out";
+  document.getElementById("userInfo").textContent = "Signed in as " + googleUser.name + " (progress saved on this device)";
+  loadProgress();
+  alert("Signed in (demo). Progress is saved locally under this account.");
+}
+function saveProgress() {
+  const key = googleUser ? "cb_" + googleUser.id : "cb_guest";
+  localStorage.setItem(key, JSON.stringify({ coins, potions, shinyStorage }));
+}
+function loadProgress() {
+  const key = googleUser ? "cb_" + googleUser.id : "cb_guest";
+  const raw = localStorage.getItem(key);
+  if (raw) {
+    try {
+      const p = JSON.parse(raw);
+      coins = p.coins ?? 60;
+      potions = p.potions ?? 2;
+      shinyStorage = p.shinyStorage || [];
+    } catch(e) {}
+  }
+  updateMetaUI();
+}
+
+/* ===================== UI ===================== */
+function updateMetaUI() {
+  document.getElementById("coinCount").textContent = coins;
+  document.getElementById("potionCount").textContent = potions;
+  document.getElementById("shopCoins").textContent = coins;
+  document.getElementById("shopPotions").textContent = potions;
+  saveProgress();
+}
+function hideAllScreens() {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+}
+function showPanel(id) {
+  hideAllScreens();
+  document.getElementById(id).classList.add("active");
+  if (id === "storagePanel") renderStorage();
+  if (id === "shopPanel") updateMetaUI();
+  if (id === "quizPanel") askQuiz();
+  if (id === "rulesPanel") renderRules();
+}
+function backToStart() {
+  hideAllScreens();
+  document.getElementById("startScreen").classList.add("active");
+  hidePlayMenu();
+  document.getElementById("potionSelect").classList.add("hidden");
+  updateMetaUI();
+}
+function openPlayMenu() {
+  isHotseat = false;
+  document.getElementById("playMenu").classList.remove("hidden");
+  document.getElementById("potionSelect").classList.add("hidden");
+  setSize(3);
+  setDiff("normal");
+}
+function hidePlayMenu() { document.getElementById("playMenu").classList.add("hidden"); }
+function startHotseat() {
+  isHotseat = true;
+  openPlayMenu();
+}
+
+function setSize(n) {
+  pendingSize = n;
+  ["size3","size5","size7"].forEach(id => document.getElementById(id).style.outline = "");
+  document.getElementById("size"+n).style.outline = "3px solid var(--accent)";
+}
+function setDiff(d) {
+  difficulty = d;
+  ["diffEasy","diffNormal","diffHard","diffInsane"].forEach(id => document.getElementById(id).classList.remove("active"));
+  const map = {easy:"diffEasy", normal:"diffNormal", hard:"diffHard", insane:"diffInsane"};
+  document.getElementById(map[d]).classList.add("active");
+}
+function goToPotions() {
+  hidePlayMenu();
+  document.getElementById("potionSelect").classList.remove("hidden");
+  document.getElementById("potionAvail").textContent = potions;
+  potionsToUse = 0;
+  buildPotionButtons();
+  updateLuckPreview();
+}
+
+/* ===================== FLASH ===================== */
+function flashFirstTurn(isPlayer) {
+  const el = document.getElementById("flashFirst");
+  el.textContent = isPlayer ? "YOU GO FIRST" : "OPPONENT GOES FIRST";
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 1700);
+}
+function flashDamage() {
+  const el = document.getElementById("flashDamage");
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 280);
+}
+function flashKO() {
+  const el = document.getElementById("flashKO");
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 550);
+}
+
+/* ===================== RULES / STORAGE / SHOP / QUIZ ===================== */
+const ruleData = [
+  {icon:"⭐", text:"Cards stay until HP = 0. HP never resets."},
+  {icon:"🗡️", text:"You cannot Attack or Boost more than once per turn."},
+  {icon:"🧪", text:"Protein +1 / DNA +2. Nucleus gets both from DNA."},
+  {icon:"🦠", text:"Influenza (DMG 0) – Infection Swap."},
+  {icon:"📈", text:"Difficulty only affects the AI’s card quality."},
+  {icon:"🔴", text:"Screen flashes red on damage, full red on KO."},
+  {icon:"📦", text:"Shinies go to Storage. Sell duplicates for coins."}
+];
+function renderRules() {
+  document.getElementById("rulesList").innerHTML = ruleData.map(r =>
+    `<div class="ruleCard"><div style="font-size:1.4rem">${r.icon}</div><div>${r.text}</div></div>`
+  ).join("");
+}
+function renderStorage() {
+  const list = document.getElementById("storageList");
+  if (!shinyStorage.length) { list.innerHTML = "<p style='opacity:0.6'>No shinies yet.</p>"; return; }
+  list.innerHTML = shinyStorage.map((s,i) => `${i+1}. ${s.name} (${s.stars}★ ${s.type}) ✨`).join("<br>");
+}
+function sellExtras() {
+  if (shinyStorage.length <= 1) return alert("Need duplicates.");
+  let count = {};
+  shinyStorage.forEach(s => count[s.name] = (count[s.name]||0)+1);
+  let kept = [], earned = 0;
+  shinyStorage.forEach(s => {
+    if (count[s.name] > 1) { count[s.name]--; earned += s.stars * 5; }
+    else kept.push(s);
+  });
+  shinyStorage = kept; coins += earned; updateMetaUI(); renderStorage();
+  alert("Sold for " + earned + " coins.");
+}
+function buyPotion(tier) {
+  const prices = {uncommon:12, rare:25, epic:50, legendary:100};
+  const points = {uncommon:1, rare:2, epic:3, legendary:5};
+  if (coins < prices[tier]) return alert("Not enough coins.");
+  coins -= prices[tier]; potions += points[tier]; updateMetaUI();
+  alert("Bought " + tier + " potion!");
+}
+function askQuiz() {
+  const pool = cards.filter(c => c.type !== "Virus");
+  const c = pool[Math.floor(Math.random()*pool.length)];
+  document.getElementById("quizQ").textContent = `Which cell type is ${c.name} from?`;
+  document.getElementById("quizFb").textContent = "";
+  document.getElementById("quizOpts").innerHTML = ["Animal","Plant","Both","Virus"].map(o =>
+    `<button onclick="answerQuiz('${o}','${c.type}')">${o}</button>`
+  ).join("");
+}
+function answerQuiz(chosen, correct) {
+  const fb = document.getElementById("quizFb");
+  if (chosen === correct) {
+    fb.innerHTML = "<span style='color:var(--green)'>Correct! +1 Potion</span>";
+    potions++; updateMetaUI();
+  } else fb.innerHTML = `<span style='color:var(--danger)'>Wrong. Answer: ${correct}</span>`;
+  setTimeout(askQuiz, 1600);
+}
+
+/* ===================== POTIONS ===================== */
+function buildPotionButtons() {
+  const row = document.getElementById("potionButtons");
+  row.innerHTML = "";
+  const max = Math.min(potions, 10);
+  for (let i = 0; i <= max; i++) {
+    const b = document.createElement("button");
+    b.textContent = i; b.style.minWidth = "42px";
+    if (i === potionsToUse) b.style.outline = "3px solid var(--accent)";
+    b.onclick = () => { potionsToUse = i; buildPotionButtons(); updateLuckPreview(); };
+    row.appendChild(b);
+  }
+}
+function updateLuckPreview() {
+  const boost = potionsToUse * 0.35;
+  document.getElementById("potionChosen").textContent = potionsToUse;
+  document.getElementById("luckPreview").textContent = (1 + boost).toFixed(1);
+}
+function cancelPotion() {
+  document.getElementById("potionSelect").classList.add("hidden");
+  document.getElementById("playMenu").classList.remove("hidden");
+}
+function confirmStart() {
+  potions -= potionsToUse;
+  matchLuck = 1 + potionsToUse * 0.35;
+  updateMetaUI();
+  document.getElementById("potionSelect").classList.add("hidden");
+  beginMatch(pendingSize);
+}
+
+/* ===================== MATCH START ===================== */
+function beginMatch(size) {
+  deckSize = size;
+  playerDeck = []; aiDeck = []; boosterDeck = [];
+  activePlayerCard = null; activeAICard = null;
+  selectedHandIndex = null; selectedBoosterIndex = null;
+  matchOver = false; waitingForPlayerCard = false;
+  actionsThisTurn = 0;
+
+  // 1. Generate ALL cards first
+  for (let i = 0; i < size; i++) {
+    playerDeck.push(makeCard(weightedCardForPlayer()));
+    aiDeck.push(makeCard(weightedCardForAI(difficulty)));
+  }
+  const bCount = size === 3 ? 2 : size === 5 ? 3 : 4;
+  for (let i = 0; i < bCount; i++) boosterDeck.push({ type: Math.random() < 0.5 ? "Protein" : "DNA" });
+
+  if (aiDeck.length) activeAICard = aiDeck.shift();
+
+  // 2. ONLY NOW decide who goes first
+  playerTurn = Math.random() < 0.5;
+
+  document.getElementById("battleLog").innerHTML = "";
+  document.getElementById("modeLabel").textContent = size + "v" + size;
+  document.getElementById("diffLabel").textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+  document.getElementById("luckLabel").textContent = matchLuck.toFixed(1);
+  document.getElementById("modeType").textContent = isHotseat ? "(Hotseat)" : "(vs AI)";
+  document.getElementById("opponentLabel").textContent = isHotseat ? "Player 2" : "AI";
+  document.getElementById("oppFieldLabel").textContent = isHotseat ? "Player 2 Active" : "AI Active";
+
+  hideAllScreens();
+  document.getElementById("game").classList.add("active");
+  renderAll();
+
+  // 3. Flash the result
+  flashFirstTurn(playerTurn);
+
+  if (playerTurn) {
+    log("You go first – choose a card!");
+    waitingForPlayerCard = true;
+  } else {
+    log((isHotseat ? "Player 2" : "AI") + " goes first!");
+    setTimeout(aiTurn, 1800);
+  }
+}
+function makeCard(base) {
+  const c = { ...base, maxStars: base.stars, shiny: false, boosters: [] };
+  const denom = {2:100,3:200,4:400,5:800}[c.stars] || 150;
+  if (Math.random() < 1 / Math.max(10, denom / matchLuck)) {
+    c.shiny = true;
+    showShinyBanner(c.name);
+    shinyStorage.push({...c});
+  }
+  return c;
+}
+
+/* ===================== RENDER ===================== */
+function cardText(c) {
+  return `${c.name}<br>${c.stars}★ HP · ${c.dmg} DMG<br><small>${c.type}</small>${c.shiny?" ✨":""}`;
+}
+function renderAll() {
+  document.getElementById("aiCard").innerHTML = activeAICard
+    ? `<div class="battleCard ${getCardColor(activeAICard.stars)}">${cardText(activeAICard)}</div>`
+    : "<div style='opacity:0.4'>Empty</div>";
+  document.getElementById("aiBattleDisplay").innerHTML = activeAICard
+    ? `<div class="battleCard ${getCardColor(activeAICard.stars)}">${cardText(activeAICard)}</div>` : "";
+  document.getElementById("aiHand").innerHTML = aiDeck.map(() => `<div class="card-back">🧬</div>`).join("");
+
+  document.getElementById("playerCard").innerHTML = activePlayerCard
+    ? `<div class="battleCard ${getCardColor(activePlayerCard.stars)}" id="playerBattleCard">${cardText(activePlayerCard)}</div>`
+    : "<div style='opacity:0.5'>Select a card below</div>";
+
+  document.getElementById("playerDeck").innerHTML = playerDeck.map((c,i) =>
+    `<div class="hand-card ${selectedHandIndex===i?"selected":""}" onclick="selectHand(${i})">
+       <div class="deckCard ${getCardColor(c.stars)}">${cardText(c)}</div>
+     </div>`
+  ).join("");
+
+  document.getElementById("boosterDeck").innerHTML = boosterDeck.map((b,i) =>
+    `<div class="booster ${selectedBoosterIndex===i?"selected":""}" onclick="selectBooster(${i})">
+       ${b.type==="Protein"?"🥩":"🧬"}<br>${b.type}
+     </div>`
+  ).join("");
+  updateButtons();
+}
+function updateButtons() {
+  const canAct = playerTurn && !matchOver && !waitingForPlayerCard && actionsThisTurn === 0;
+  document.getElementById("btnPlay").disabled = selectedHandIndex === null || !!activePlayerCard || matchOver;
+  document.getElementById("btnAttack").disabled = !activePlayerCard || !activeAICard || !canAct;
+  document.getElementById("btnBoost").disabled = !activePlayerCard || selectedBoosterIndex === null || !canAct;
+}
+
+/* ===================== ACTIONS ===================== */
+function selectHand(i) {
+  if (activePlayerCard || matchOver) return;
+  selectedHandIndex = selectedHandIndex === i ? null : i;
+  renderAll();
+}
+function playSelected() {
+  if (selectedHandIndex === null || activePlayerCard || matchOver) return;
+  activePlayerCard = playerDeck.splice(selectedHandIndex, 1)[0];
+  selectedHandIndex = null;
+  waitingForPlayerCard = false;
+  log("You played " + activePlayerCard.name + " (" + activePlayerCard.type + ")");
+  renderAll();
+  // Placing a card does NOT count as an action and does NOT change turn
+  if (!playerTurn) setTimeout(aiTurn, 600);
+}
+function selectBooster(i) {
+  selectedBoosterIndex = selectedBoosterIndex === i ? null : i;
+  renderAll();
+}
+function playerUseBooster() {
+  if (!playerTurn || !activePlayerCard || selectedBoosterIndex === null || matchOver || actionsThisTurn > 0) return;
+  const b = boosterDeck[selectedBoosterIndex];
+  const val = b.type === "DNA" ? 2 : 1;
+  if (activePlayerCard.name === "Nucleus" && b.type === "DNA") {
+    activePlayerCard.stars += 2; activePlayerCard.dmg += 2;
+  } else if (activePlayerCard.stars < activePlayerCard.maxStars * 0.7) {
+    activePlayerCard.stars += val;
+  } else activePlayerCard.dmg += val;
+  activePlayerCard.boosters.push(b);
+  boosterDeck.splice(selectedBoosterIndex, 1);
+  selectedBoosterIndex = null;
+  actionsThisTurn = 1;               // used the one action
+  log("Boosted " + activePlayerCard.name);
+  playerTurn = false;
+  renderAll();
+  setTimeout(aiTurn, 650);
+}
+function playerAttack() {
+  if (!playerTurn || !activePlayerCard || !activeAICard || matchOver || waitingForPlayerCard || actionsThisTurn > 0) return;
+  actionsThisTurn = 1;               // used the one action
+  log("You attack with " + activePlayerCard.name + "!");
+  resolveCombat(true);
+}
+
+/* ===================== COMBAT ===================== */
+function resolveCombat(playerInitiated) {
+  if (!activePlayerCard || !activeAICard) return;
+
+  if (activePlayerCard.name === "Influenza" && playerInitiated) {
+    log("🦠 Infection Swap!");
+    const tmp = activePlayerCard.stars;
+    activePlayerCard.stars = activeAICard.stars;
+    activeAICard.stars = tmp;
+    renderAll();
+    if (activeAICard.stars <= 0) ko("ai");
+    else { playerTurn = false; actionsThisTurn = 0; setTimeout(aiTurn, 700); }
+    return;
+  }
+  if (activeAICard.name === "Influenza" && !playerInitiated) {
+    log("🦠 Infection Swap!");
+    const tmp = activeAICard.stars;
+    activeAICard.stars = activePlayerCard.stars;
+    activePlayerCard.stars = tmp;
+    renderAll();
+    flashDamage();
+    if (activePlayerCard.stars <= 0) ko("player");
+    else { playerTurn = true; actionsThisTurn = 0; updateButtons(); }
+    return;
+  }
+
+  if (playerInitiated) {
+    activeAICard.stars -= activePlayerCard.dmg;
+    log(activePlayerCard.name + " hits for " + activePlayerCard.dmg + " → HP " + Math.max(0, activeAICard.stars));
+  } else {
+    activePlayerCard.stars -= activeAICard.dmg;
+    log(activeAICard.name + " hits for " + activeAICard.dmg + " → Your HP " + Math.max(0, activePlayerCard.stars));
+    flashDamage();
+  }
+  renderAll();
+
+  const pAlive = activePlayerCard.stars > 0;
+  const aAlive = activeAICard.stars > 0;
+
+  if (pAlive && !aAlive) { log("You win the clash!"); ko("ai"); }
+  else if (!pAlive && aAlive) { log("Opponent wins the clash!"); ko("player"); }
+  else if (!pAlive && !aAlive) { log("Both destroyed!"); ko("both"); }
+  else {
+    if (playerInitiated) {
+      playerTurn = false;
+      actionsThisTurn = 0;
+      setTimeout(aiTurn, 700);
+    } else {
+      playerTurn = true;
+      actionsThisTurn = 0;
+      updateButtons();
+    }
+  }
+}
+
+function ko(who) {
+  if (who === "player" || who === "both") flashKO();
+
+  if (who === "ai" || who === "both") {
+    const el = document.querySelector("#aiCard .battleCard");
+    if (el) el.classList.add("ko");
+  }
+  if (who === "player" || who === "both") {
+    const el = document.querySelector("#playerBattleCard");
+    if (el) el.classList.add("ko");
+  }
+
+  setTimeout(() => {
+    if (who === "ai" || who === "both") activeAICard = aiDeck.length ? aiDeck.shift() : null;
+    if (who === "player" || who === "both") {
+      activePlayerCard = null;
+      waitingForPlayerCard = true;
+    }
+    renderAll();
+    checkMatchEnd();
+    if (matchOver) return;
+
+    actionsThisTurn = 0;
+    if (who === "player" || who === "both") {
+      playerTurn = true;
+      log("Choose your next card");
+      updateButtons();
+    } else {
+      playerTurn = true;
+      updateButtons();
+    }
+  }, 550);
+}
+
+function aiTurn() {
+  if (matchOver) return;
+  actionsThisTurn = 0;
+
+  if (!activeAICard) {
+    if (aiDeck.length) {
+      activeAICard = aiDeck.shift();
+      renderAll();
+      log((isHotseat ? "Player 2" : "AI") + " plays a new card");
+    } else { checkMatchEnd(); return; }
+  }
+  if (!activePlayerCard) {
+    playerTurn = true;
+    waitingForPlayerCard = true;
+    updateButtons();
+    return;
+  }
+
+  if (Math.random() < 0.30) {
+    activeAICard.stars += 1;
+    log((isHotseat ? "Player 2" : "AI") + " boosted");
+    renderAll();
+    playerTurn = true;
+    actionsThisTurn = 0;
+    updateButtons();
+    return;
+  }
+  log((isHotseat ? "Player 2" : "AI") + " attacks!");
+  resolveCombat(false);
+}
+
+function checkMatchEnd() {
+  if (matchOver) return;
+  if (!activeAICard && aiDeck.length === 0) {
+    matchOver = true;
+    log("🏆 You win!");
+    coins += deckSize * 8;
+    updateMetaUI();
+    setTimeout(() => { if (confirm("Victory! Return to menu?")) endMatch(); }, 600);
+  } else if (!activePlayerCard && playerDeck.length === 0) {
+    matchOver = true;
+    log("💀 You lost…");
+    setTimeout(() => { if (confirm("Defeat. Return to menu?")) endMatch(); }, 600);
+  }
+}
+function endMatch() {
+  hideAllScreens();
+  document.getElementById("startScreen").classList.add("active");
+  updateMetaUI();
+}
+
+function log(t) {
+  const el = document.getElementById("battleLog");
+  el.innerHTML += `<p>${t}</p>`;
+  el.scrollLeft = el.scrollWidth;
+}
+function showShinyBanner(name) {
+  const el = document.createElement("div");
+  el.className = "shiny-banner";
+  el.textContent = `✨ SHINY ${name}! ✨`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2300);
+}
+
+/* INIT */
+loadProgress();
+updateMetaUI();
+</script>
+</body>
+</html>
